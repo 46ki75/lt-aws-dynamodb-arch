@@ -17,12 +17,7 @@
         "yzhang.markdown-all-in-one",
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
-        // Rust
-        "fill-labs.dependi",
-        // .NET
-        "ms-dotnettools.csharp",
-        "ms-dotnettools.csdevkit",
-        "ms-dotnettools.vscodeintellicode-csharp"
+        "antfu.slidev"
       ]
     }
   },
@@ -30,16 +25,6 @@
   "features": {
     "ghcr.io/devcontainers-extra/features/starship": {},
     "ghcr.io/devcontainers/features/github-cli": {},
-    // AWS
-    "ghcr.io/devcontainers/features/aws-cli": {},
-    // Node.js
-    "ghcr.io/devcontainers/features/node": {},
-    // Rust
-    "ghcr.io/devcontainers/features/rust": {},
-    // .NET
-    "ghcr.io/devcontainers/features/dotnet": {},
-    // Terraform
-    "ghcr.io/devcontainers/features/terraform": {}
-  },
-  "postCreateCommand": "echo 'eval \"$(starship init bash)\"' >> ~/.bashrc"
+    "ghcr.io/devcontainers/features/node": {}
+  }
 }
