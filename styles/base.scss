@@ -2,6 +2,20 @@
   --text-light: #606875;
 }
 
+#slide-content {
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 10000;
+    background-color: rgba(#868e9c, 0.05);
+    pointer-events: none;
+  }
+}
+
 .slidev-layout {
   font-family: "Noto Sans JP", sans-serif;
 
@@ -9,6 +23,10 @@
 
   h1 + p {
     all: unset;
+  }
+
+  strong {
+    color: #c6ab69;
   }
 
   ul {

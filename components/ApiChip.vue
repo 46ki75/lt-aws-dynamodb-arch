@@ -1,5 +1,5 @@
 <template>
-  <span :class="$style.chip">
+  <span :class="$style.chip" :style="{ '--color': i ? '#c0cce1' : '#e3e5e8' }">
     <Icon icon="mdi:code" style="display: inline" color="gray" />
     <slot />
   </span>
@@ -8,7 +8,9 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
 
-export interface ApiChipProps {}
+export interface ApiChipProps {
+  i?: boolean;
+}
 
 withDefaults(defineProps<ApiChipProps>(), {});
 </script>
@@ -22,6 +24,6 @@ withDefaults(defineProps<ApiChipProps>(), {});
   font-family: monospace;
   padding: 0 0.25rem;
   border-radius: 0.25rem;
-  background-color: rgba(#6987b8, 0.2);
+  background-color: var(--color);
 }
 </style>
