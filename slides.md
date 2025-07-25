@@ -25,30 +25,42 @@ mdc: true
 #  ogImage: https://cover.sli.dev
 ---
 
-# Welcome to Slidev
+# Amazon DynamoDB の設計は　具体的にはどうするのだろう？
 
-Presentation slides for developers
-
-<div @click="$slidev.nav.next" class="mt-12 py-1" hover:bg="white op-10">
-  Press Space for next page <carbon:arrow-right />
-</div>
+Ikuma Yamashita
 
 <div class="abs-br m-6 text-xl">
   <button @click="$slidev.nav.openInEditor()" title="Open in Editor" class="slidev-icon-btn">
     <carbon:edit />
   </button>
-  <a href="https://github.com/slidevjs/slidev" target="_blank" class="slidev-icon-btn">
+  <a href="https://github.com/46ki75/lt-aws-dynamodb-arch" target="_blank" class="slidev-icon-btn">
     <carbon:logo-github />
   </a>
 </div>
 
 <!--
-The last comment block of each slide will be treated as slide notes. It will be visible and editable in Presenter Mode along with the slide. [Read more in the docs](https://sli.dev/guide/syntax.html#notes)
+皆様、こんばんは。
+
+山下 生真と申します。本日は、「Amazon DynamoDB の設計は　具体的にはどうするのだろう？」というテーマでお話させていただきます。
+
+お集りの Jr.Champions の方々であれば、DynamoDB がどのようなサービスかはご存知かと思いますが、実際にどうやって設計するのかというところは、かなり踏み込まないと理解しにくい部分かと思います。
+
+今回は 5分という短い時間ですが、勘所を押さえて次の学習に役立てるような内容にしたいと考えております！
+
+どうぞよろしくお願いします！
 -->
 
 ---
 
 <Profile />
+
+<!--
+まず私の自己紹介です。
+
+パブリッククラウドサービス上でインフラエンジニアをしております。主に POSIX 系のサーバー構築を Ansible で行うことが多いです。
+
+仕事ではインフラエンジニアですが、学生時代は組み込みをやっていて現在は OSS 開発などを行っています。
+-->
 
 ---
 
@@ -64,12 +76,21 @@ Amazon DynamoDB は**サーバーレス**の**フルマネージド** **NoSQL** 
 
 ## RDBMSとの違い
 
-- **スキーマレス**: 事前にテーブル構造を厳密に定義する必要がない
 - **水平スケーリング**: データ量やアクセス数の増加に強い
 - **結合操作なし**: テーブル間のJOINは基本的に行わない設計思想
 
 <!--
-This is _another_ note
+まず、DynamoDb の特徴についてです。
+
+多くの方がご存知の部分が多いと思いますので、「主な特徴」の部分については省略させてください。
+
+今回は RDBMS との違いの部分に着目してお話します。ここに記したもの以外にも多くありますが、特に有効なものをピックアップしました。特にアーキテクトとして案件に入る場合、ここの違いやメリデメを説明できる必要がありますね。
+
+「RDBMS との違い」 の部分にご注目ください。
+
+「**水平スケーリング**」 についてですが、これは RDBMS では達成が難しいものです。一応 RDBMS でも、複数 DB に分けて二層コミットを実装することで水平スケーリングはできますが、調停サーバーのスケーリングを考えると、真の水平スケーリングと言えるかは微妙です。特にペタバイトオーダーになると調停サーバーのスケーリングも考える必要が出てきますね。
+
+続いて「**結合操作なし**」についてですが、これは DynamoDB がデータが増えてもレイテンシがほとんど変わらない理由の一つです。RDBMS だと正規化したデータの結合時にデータが増えるごとに互いのインデックスが増えるため、大規模になると非機能要件を満たさなくなってしまうことが出てきてしまいますね。
 -->
 
 ---
@@ -86,9 +107,9 @@ Amazon DynamoDB では2種類の主キーを選択できます
 ![Data Distribution](./images/data-distribution.png)
 
 <!--
-まず、DynamoDB のテーブルを作成する際に必ず設定が必要になる主キーの選択についてご説明します。
+続いて、DynamoDB のテーブルを作成する際に必ず設定が必要になる主キーの選択についてご説明します。
 
-DynamoDB のテーブル作成時には、単一の主キーと複合主キーを選択することができます。今回ご紹介するのは PK と SK の組み合わせによって一意となる場合についての設計パターンです。
+DynamoDB のテーブル作成時には、単一の主キーと複合主キーを選択することができます。今回ご紹介するのは パーティションキー と ソートキー の組み合わせによって一意となる場合についての設計パターンです。
 
 PK と SK の複合によって主キーが構成される場合、図のようなデータ配置となります。図の点線で囲まれている特定のパーティション内でソートキーの順番でデータが並んでいます。
 -->
@@ -306,3 +327,17 @@ Amazon DynamoDB でテーブル設計を行う場合、**読み取り操作** �
 - **コスト最適化**: 消費する Capacity Unit を減らす！
   - 読み取りに `Scan` は使わない
   - `Query` を使用して結合操作を削減する
+
+<!--
+最期に、今回お伝えしたかったことのまとめです。
+
+DynamoDB の設計ではアクセスパターンを重視します。今回ご紹介する際にもどのようなスキーマにするかとはお伝えせず、どのようなデータ取得をしたいかという例からお伝えしました。これは実際に DynamoDB での設計に近い考え方となっていました。
+
+次に、コスト最適化です。消費する Capacity Unit を減らすことを考えてください。これを考えれば、コストだけでなくレイテンシも安定します。このためにテーブルの全スキャンである `Scan` は使用しないことを覚えておいてください。
+
+以上で発表は終了です。
+
+DynamoDB は永年無料枠がありますので、今回ご興味を持たれた方はぜひ触ってみてください。
+
+ご清聴ありがとうございました。
+-->
