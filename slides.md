@@ -1,6 +1,6 @@
 ---
 # You can also start simply with 'default'
-theme: seriph
+theme: default
 # random image from a curated Unsplash collection by Anthony
 # like them? see https://unsplash.com/collections/94734566/slidev
 background: https://cover.sli.dev
@@ -25,614 +25,319 @@ mdc: true
 #  ogImage: https://cover.sli.dev
 ---
 
-# Welcome to Slidev
+# Amazon DynamoDB の設計は　具体的にはどうするのだろう？
 
-Presentation slides for developers
-
-<div @click="$slidev.nav.next" class="mt-12 py-1" hover:bg="white op-10">
-  Press Space for next page <carbon:arrow-right />
-</div>
+Ikuma Yamashita
 
 <div class="abs-br m-6 text-xl">
   <button @click="$slidev.nav.openInEditor()" title="Open in Editor" class="slidev-icon-btn">
     <carbon:edit />
   </button>
-  <a href="https://github.com/slidevjs/slidev" target="_blank" class="slidev-icon-btn">
+  <a href="https://github.com/46ki75/lt-aws-dynamodb-arch" target="_blank" class="slidev-icon-btn">
     <carbon:logo-github />
   </a>
 </div>
 
 <!--
-The last comment block of each slide will be treated as slide notes. It will be visible and editable in Presenter Mode along with the slide. [Read more in the docs](https://sli.dev/guide/syntax.html#notes)
+皆様、こんばんは。
+
+山下 生真と申します。本日は、「Amazon DynamoDB の設計は　具体的にはどうするのだろう？」というテーマでお話させていただきます。
+
+お集りの Jr.Champions の方々であれば、DynamoDB がどのようなサービスかはご存知かと思いますが、実際にどうやって設計するのかというところは、かなり踏み込まないと理解しにくい部分かと思います。
+
+今回は 5分という短い時間ですが、勘所を押さえて次の学習に役立てるような内容にしたいと考えております！
+
+どうぞよろしくお願いします！
 -->
 
 ---
-transition: fade-out
----
 
-# What is Slidev?
-
-Slidev is a slides maker and presenter designed for developers, consist of the following features
-
-- 📝 **Text-based** - focus on the content with Markdown, and then style them later
-- 🎨 **Themable** - themes can be shared and re-used as npm packages
-- 🧑‍💻 **Developer Friendly** - code highlighting, live coding with autocompletion
-- 🤹 **Interactive** - embed Vue components to enhance your expressions
-- 🎥 **Recording** - built-in recording and camera view
-- 📤 **Portable** - export to PDF, PPTX, PNGs, or even a hostable SPA
-- 🛠 **Hackable** - virtually anything that's possible on a webpage is possible in Slidev
-<br>
-<br>
-
-Read more about [Why Slidev?](https://sli.dev/guide/why)
+<Profile />
 
 <!--
-You can have `style` tag in markdown to override the style for the current page.
-Learn more: https://sli.dev/features/slide-scope-style
+まず私の自己紹介です。
+
+パブリッククラウドサービス上でインフラエンジニアをしております。主に POSIX 系のサーバー構築を Ansible で行うことが多いです。
+
+仕事ではインフラエンジニアですが、学生時代は組み込みをやっていて現在は OSS 開発などを行っています。
 -->
 
-<style>
-h1 {
-  background-color: #2B90B6;
-  background-image: linear-gradient(45deg, #4EC5D4 10%, #146b8c 20%);
-  background-size: 100%;
-  -webkit-background-clip: text;
-  -moz-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  -moz-text-fill-color: transparent;
-}
-</style>
+---
+
+# Amazon DynamoDB の特徴
+
+Amazon DynamoDB は**サーバーレス**の**フルマネージド** **NoSQL** データベースです。
+
+## 主な特徴
+
+- **サーバーレス**: インフラ管理が不要で、使った分だけの従量課金
+- **フルマネージド**: パッチ適用、バックアップ、スケーリングが自動化
+- **高パフォーマンス**: 一桁ミリ秒の低レイテンシを実現
+
+## RDBMSとの違い
+
+- **水平スケーリング**: データ量やアクセス数の増加に強い
+- **結合操作なし**: テーブル間のJOINは基本的に行わない設計思想
 
 <!--
-Here is another comment.
+まず、DynamoDb の特徴についてです。
+
+多くの方がご存知の部分が多いと思いますので、「主な特徴」の部分については省略させてください。
+
+今回は RDBMS との違いの部分に着目してお話します。ここに記したもの以外にも多くありますが、特に有効なものをピックアップしました。特にアーキテクトとして案件に入る場合、ここの違いやメリデメを説明できる必要がありますね。
+
+「RDBMS との違い」 の部分にご注目ください。
+
+「**水平スケーリング**」 についてですが、これは RDBMS では達成が難しいものです。一応 RDBMS でも、複数 DB に分けて二層コミットを実装することで水平スケーリングはできますが、調停サーバーのスケーリングを考えると、真の水平スケーリングと言えるかは微妙です。特にペタバイトオーダーになると調停サーバーのスケーリングも考える必要が出てきますね。
+
+続いて「**結合操作なし**」についてですが、これは DynamoDB がデータが増えてもレイテンシがほとんど変わらない理由の一つです。RDBMS だと正規化したデータの結合時にデータが増えるごとに互いのインデックスが増えるため、大規模になると非機能要件を満たさなくなってしまうことが出てきてしまいますね。
 -->
 
 ---
-transition: slide-up
-level: 2
----
 
-# Navigation
+# 主キーの選択
 
-Hover on the bottom-left corner to see the navigation's controls panel, [learn more](https://sli.dev/guide/ui#navigation-bar)
+Amazon DynamoDB では2種類の主キーを選択できます
 
-## Keyboard Shortcuts
+- **PK(パーティションキー)のみ**: KV ストアとして使用する場合
+- **PK(パーティションキー)とSK(ソートキー)の複合**: ドキュメント DB として使用する場合
 
-|                                                     |                             |
-| --------------------------------------------------- | --------------------------- |
-| <kbd>right</kbd> / <kbd>space</kbd>                 | next animation or slide     |
-| <kbd>left</kbd>  / <kbd>shift</kbd><kbd>space</kbd> | previous animation or slide |
-| <kbd>up</kbd>                                       | previous slide              |
-| <kbd>down</kbd>                                     | next slide                  |
+今回ご紹介する設計パターンは PK と SK の複合主キーの場合についてです。
 
-<!-- https://sli.dev/guide/animations.html#click-animation -->
-<img
-  v-click
-  class="absolute -bottom-9 -left-7 w-80 opacity-50"
-  src="https://sli.dev/assets/arrow-bottom-left.svg"
-  alt=""
-/>
-<p v-after class="absolute bottom-23 left-45 opacity-30 transform -rotate-10">Here!</p>
-
----
-layout: two-cols
-layoutClass: gap-16
----
-
-# Table of contents
-
-You can use the `Toc` component to generate a table of contents for your slides:
-
-```html
-<Toc minDepth="1" maxDepth="1" />
-```
-
-The title will be inferred from your slide content, or you can override it with `title` and `level` in your frontmatter.
-
-::right::
-
-<Toc text-sm minDepth="1" maxDepth="2" />
-
----
-layout: image-right
-image: https://cover.sli.dev
----
-
-# Code
-
-Use code snippets and get the highlighting directly, and even types hover!
-
-```ts [filename-example.ts] {all|4|6|6-7|9|all} twoslash
-// TwoSlash enables TypeScript hover information
-// and errors in markdown code blocks
-// More at https://shiki.style/packages/twoslash
-import { computed, ref } from 'vue'
-
-const count = ref(0)
-const doubled = computed(() => count.value * 2)
-
-doubled.value = 2
-```
-
-<arrow v-click="[4, 5]" x1="350" y1="310" x2="195" y2="342" color="#953" width="2" arrowSize="1" />
-
-<!-- This allow you to embed external code blocks -->
-<<< @/snippets/external.ts#snippet
-
-<!-- Footer -->
-
-[Learn more](https://sli.dev/features/line-highlighting)
-
-<!-- Inline style -->
-<style>
-.footnotes-sep {
-  @apply mt-5 opacity-10;
-}
-.footnotes {
-  @apply text-sm opacity-75;
-}
-.footnote-backref {
-  display: none;
-}
-</style>
+![Data Distribution](./images/data-distribution.png)
 
 <!--
-Notes can also sync with clicks
+続いて、DynamoDB のテーブルを作成する際に必ず設定が必要になる主キーの選択についてご説明します。
 
-[click] This will be highlighted after the first click
+DynamoDB のテーブル作成時には、単一の主キーと複合主キーを選択することができます。今回ご紹介するのは パーティションキー と ソートキー の組み合わせによって一意となる場合についての設計パターンです。
 
-[click] Highlighted with `count = ref(0)`
-
-[click:3] Last click (skip two clicks)
+PK と SK の複合によって主キーが構成される場合、図のようなデータ配置となります。図の点線で囲まれている特定のパーティション内でソートキーの順番でデータが並んでいます。
 -->
 
 ---
-level: 2
----
 
-# Shiki Magic Move
+# CU (Capacity Unit) について
 
-Powered by [shiki-magic-move](https://shiki-magic-move.netlify.app/), Slidev supports animations across multiple code snippets.
+**Capacity Unit** とは、Amazon DynamoDB の**データベース操作の計算コスト**を指します。これは**レイテンシ**及び**金銭的コスト**に直結します。
 
-Add multiple code blocks and wrap them with <code>````md magic-move</code> (four backticks) to enable the magic move. For example:
+つまり、**消費する Capacity Unit を最小限に抑える**ように設計を行うことが一つの重要な目標です。
 
-````md magic-move {lines: true}
-```ts {*|2|*}
-// step 1
-const author = reactive({
-  name: 'John Doe',
-  books: [
-    'Vue 2 - Advanced Guide',
-    'Vue 3 - Basic Guide',
-    'Vue 4 - The Mystery'
-  ]
-})
-```
+- RCU (Read Capacity Unit): 読み取り操作に使用する CU
+- WCU (Write Capacity Unit): 書き込み(挿入・変更・削除)操作に使用する CU
 
-```ts {*|1-2|3-4|3-4,8}
-// step 2
-export default {
-  data() {
-    return {
-      author: {
-        name: 'John Doe',
-        books: [
-          'Vue 2 - Advanced Guide',
-          'Vue 3 - Basic Guide',
-          'Vue 4 - The Mystery'
-        ]
-      }
-    }
-  }
-}
-```
+## スループットモードの違い
 
-```ts
-// step 3
-export default {
-  data: () => ({
-    author: {
-      name: 'John Doe',
-      books: [
-        'Vue 2 - Advanced Guide',
-        'Vue 3 - Basic Guide',
-        'Vue 4 - The Mystery'
-      ]
-    }
-  })
-}
-```
+Amazon DynamoDB の Capacity Unit には[2つのスループットモード](https://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/capacity-mode.html)があり、課金体系が違います。
 
-Non-code blocks are ignored.
+- オンデマンド: Capacity Unit の上限を指定せず、使用された Capacity Unit の分だけ課金される。[^1]
+- プロビジョンド: Capacity Unit の上限を設定し、設定値に基づいて時間課金される。
 
-```vue
-<!-- step 4 -->
-<script setup>
-const author = {
-  name: 'John Doe',
-  books: [
-    'Vue 2 - Advanced Guide',
-    'Vue 3 - Basic Guide',
-    'Vue 4 - The Mystery'
-  ]
-}
-</script>
-```
-````
-
----
-
-# Components
-
-<div grid="~ cols-2 gap-4">
-<div>
-
-You can use Vue components directly inside your slides.
-
-We have provided a few built-in components like `<Tweet/>` and `<Youtube/>` that you can use directly. And adding your custom components is also super easy.
-
-```html
-<Counter :count="10" />
-```
-
-<!-- ./components/Counter.vue -->
-<Counter :count="10" m="t-4" />
-
-Check out [the guides](https://sli.dev/builtin/components.html) for more.
-
-</div>
-<div>
-
-```html
-<Tweet id="1390115482657726468" />
-```
-
-<Tweet id="1390115482657726468" scale="0.65" />
-
-</div>
-</div>
+[^1]: サービスクォータによって実質的な制限あり
 
 <!--
-Presenter note with **bold**, *italic*, and ~~striked~~ text.
+お次に Capacity Unit についてご説明します。
 
-Also, HTML elements are valid:
-<div class="flex w-full">
-  <span style="flex-grow: 1;">Left content</span>
-  <span>Right content</span>
-</div>
+Capacity Unit は DynamoDB を利用する上で非常に重要な概念です。Capacity Unit は端的に言うと、データベース操作にかかった計算コストを指しています。
+
+これはレイテンシや金銭的コストに直結します。つまり、消費する Capacity Unit を最小限に抑えるように設計を行うことが一つの重要な目的です。これ以降でも Capacity Unit の消費を抑えることに着目して話を進めていきます。
+
+また、Capacity Unit は書き込みと読み込みのそれぞれを区別します。それぞれ Read Capacity Unit, Write Capacity Unit として分かれています。
+
+スループットモードについては上限を指定するかしないかで2つのモードがあります。これによって料金体系と API のレートリミットが決まるというわけです。
 -->
 
 ---
-class: px-20
----
 
-# Themes
+# API の種類
 
-Slidev comes with powerful theming support. Themes can provide styles, layouts, components, or even configurations for tools. Switching between themes by just **one edit** in your frontmatter:
+書き込み API はどのようなテーブル設計でも殆ど消費 CU が変わりませんが、読み取り API はどのようなテーブル設計にするかで消費 CU が大きく変わります。
 
-<div grid="~ cols-2 gap-2" m="t-2">
+このため、まずは **読み取り API** がそれぞれどのような役割を持つかを理解するところから始まります。
 
-```yaml
----
-theme: default
----
-```
+|        |                                                                                                                     |
+| ------ | ------------------------------------------------------------------------------------------------------------------- |
+| Create | <ApiChip>PutItem</ApiChip> <ApiChip>BatchWriteItem</ApiChip>                                                        |
+| Read   | <ApiChip i>GetItem</ApiChip> <ApiChip i>BatchGetItem</ApiChip> <ApiChip i>Query</ApiChip> <ApiChip i>Scan</ApiChip> |
+| Update | <ApiChip>UpdateItem</ApiChip> <ApiChip>PutItem</ApiChip>                                                            |
+| Delete | <ApiChip>DeleteItem</ApiChip> <ApiChip>BatchWriteItem</ApiChip>                                                     |
 
-```yaml
----
-theme: seriph
----
-```
+※ [PartiQL](https://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/ql-reference.html) という SQL 互換のクエリ言語による API も存在するが、訛りがきつめ。
 
-<img border="rounded" src="https://github.com/slidevjs/themes/blob/main/screenshots/theme-default/01.png?raw=true" alt="">
+<!--
+続いて、DynamoDB で利用できる API についてご紹介します。
 
-<img border="rounded" src="https://github.com/slidevjs/themes/blob/main/screenshots/theme-seriph/01.png?raw=true" alt="">
+副作用がある API はテーブルの設計によって消費する Capacity Unit はほぼ変わりません。そのため、この中で重要なものは読み取り系の API です。
 
-</div>
-
-Read more about [How to use a theme](https://sli.dev/guide/theme-addon#use-theme) and
-check out the [Awesome Themes Gallery](https://sli.dev/resources/theme-gallery).
+表にある 青背景 の API が重要な APIですね。
+-->
 
 ---
 
-# Clicks Animations
+# 読み取り API の種類
 
-You can add `v-click` to elements to add a click animation.
+## `GetItem`, `BatchGetItem`
 
-<div v-click>
+- `GetItem`: 主キー ("PK" もしくは "PK と SK の組み合わせ") によってアイテムを1件取得するAPI
+- `BatchGetItem`: `GetItem` をまとめて複数回実行できる API (通信ラウンドトリップが減る)
 
-This shows up when you click the slide:
+## `Query`
 
-```html
-<div v-click>This shows up when you click the slide.</div>
-```
+特定の PK 内の項目について、SK を用いて欲しいデータを絞り込んで取得する
 
-</div>
+SK はソートされているため、以上・以下……などのソートされている前提の条件が使用可能
 
-<br>
+## `Scan`
 
-<v-click>
+テーブルのすべてのデータを取得する。大量に CU を使用するため本番ワークロードでは非推奨。
 
-The <span v-mark.red="3"><code>v-mark</code> directive</span>
-also allows you to add
-<span v-mark.circle.orange="4">inline marks</span>
-, powered by [Rough Notation](https://roughnotation.com/):
+<!--
+データの読み取り API についてご説明します。
 
-```html
-<span v-mark.underline.orange>inline markers</span>
-```
+最初に GetItem についてですが、これは主キーによって1つのデータを取得するものです。`BatchGetItem` は `GetItem` の複数レコードに対しての操作を1回の API 呼び出しでできるというものです。
 
-</v-click>
+次に `Query` ですが、こちらは特定のパーティション内でソートされているアイテムに対して特定範囲のデータを絞り込んで取得することができる操作です。`Query` は少し複雑なので後の実例で補足します。
 
-<div mt-20 v-click>
+最期に `Scan` ですが、これはテーブルのフルスキャンであり、Capacity Unit を大量に消費するので使用しません。
 
-[Learn more](https://sli.dev/guide/animations#click-animation)
-
-</div>
+まとめると、`GetItem`, `BatchGetItem`, `Query` の 3種類の API のみでデータ取得ができるようにテーブル設計をする必要があるということです。
+-->
 
 ---
 
-# Motions
+# 例から設計方法を理解する
 
-Motion animations are powered by [@vueuse/motion](https://motion.vueuse.org/), triggered by `v-motion` directive.
+Japan AWS Jr.Champions のアウトプット内容を管理するための DB 設計を行いたい
 
-```html
-<div
-  v-motion
-  :initial="{ x: -80 }"
-  :enter="{ x: 0 }"
-  :click-3="{ x: 80 }"
-  :leave="{ x: 1000 }"
->
-  Slidev
-</div>
-```
+## RDBMS の場合……
 
-<div class="w-60 relative">
-  <div class="relative w-40 h-40">
-    <img
-      v-motion
-      :initial="{ x: 800, y: -100, scale: 1.5, rotate: -50 }"
-      :enter="final"
-      class="absolute inset-0"
-      src="https://sli.dev/logo-square.png"
-      alt=""
-    />
-    <img
-      v-motion
-      :initial="{ y: 500, x: -100, scale: 2 }"
-      :enter="final"
-      class="absolute inset-0"
-      src="https://sli.dev/logo-circle.png"
-      alt=""
-    />
-    <img
-      v-motion
-      :initial="{ x: 600, y: 400, scale: 2, rotate: 100 }"
-      :enter="final"
-      class="absolute inset-0"
-      src="https://sli.dev/logo-triangle.png"
-      alt=""
-    />
-  </div>
+![ER](./images/er.png)
 
-  <div
-    class="text-5xl absolute top-14 left-40 text-[#2B90B6] -z-1"
-    v-motion
-    :initial="{ x: -80, opacity: 0}"
-    :enter="{ x: 0, opacity: 1, transition: { delay: 2000, duration: 1000 } }">
-    Slidev
-  </div>
-</div>
+これを Amazon DynamoDB で設計する場合について考えます
 
-<!-- vue script setup scripts can be directly used in markdown, and will only affects current page -->
-<script setup lang="ts">
-const final = {
-  x: 0,
-  y: 0,
-  rotate: 0,
-  scale: 1,
-  transition: {
-    type: 'spring',
-    damping: 10,
-    stiffness: 20,
-    mass: 2
-  }
-}
-</script>
+<!--
+では、実際に DynamoDB でどのような設計をするのかについてご説明したいのですが、まずは非常に一般的な RDB の DB 設計を DynamoDB でどのように表現するかを考えてみます。
 
-<div
-  v-motion
-  :initial="{ x:35, y: 30, opacity: 0}"
-  :enter="{ y: 0, opacity: 1, transition: { delay: 3500 } }">
+例として、Jr. Champions のアウトプットを管理するための DB を考えます。
 
-[Learn more](https://sli.dev/guide/animations.html#motion)
-
-</div>
+RDB だと、`user` テーブルと `contribution` テーブルを作成して、ユーザーに複数のアウトプットを関連付けるために `user_id` を結合用のキーとしますよね。これが DynamoDB だとどうなるでしょうか？
+-->
 
 ---
 
-# LaTeX
+Amazon DynamoDB でテーブル設計を行う場合、**読み取り操作** が重要 (再確認)
 
-LaTeX is supported out-of-box. Powered by [KaTeX](https://katex.org/).
+今回の例で必要な読み取り操作は、以下の2つです。
 
-<div h-3 />
+- 特定の **ユーザー** の読み取り
+- **アウトプット** の読み取り → 特定 **ユーザー** の **アプトプット** の一覧の読み取り
 
-Inline $\sqrt{3x-1}+(1+x)^2$
+![contribution-raw](./images/contribution-raw.png)
 
-Block
-$$ {1|3|all}
-\begin{aligned}
-\nabla \cdot \vec{E} &= \frac{\rho}{\varepsilon_0} \\
-\nabla \cdot \vec{B} &= 0 \\
-\nabla \times \vec{E} &= -\frac{\partial\vec{B}}{\partial t} \\
-\nabla \times \vec{B} &= \mu_0\vec{J} + \mu_0\varepsilon_0\frac{\partial\vec{E}}{\partial t}
-\end{aligned}
-$$
+<!--
+まず、DynamoDB では読み取り操作が重要でした。
 
-[Learn more](https://sli.dev/features/latex)
+このため、必要な読み取り操作を洗い出します。
 
----
+今回は非常にシンプルで、
 
-# Diagrams
+- 特定のユーザーの読み取りと
+- ユーザーごとのアウトプット一覧の読み取り、つまりあるユーザーがどんなアウトプットをしているか調べることができるようにするということです。
 
-You can create diagrams / graphs from textual descriptions, directly in your Markdown.
-
-<div class="grid grid-cols-4 gap-5 pt-4 -mb-6">
-
-```mermaid {scale: 0.5, alt: 'A simple sequence diagram'}
-sequenceDiagram
-    Alice->John: Hello John, how are you?
-    Note over Alice,John: A typical interaction
-```
-
-```mermaid {theme: 'neutral', scale: 0.8}
-graph TD
-B[Text] --> C{Decision}
-C -->|One| D[Result 1]
-C -->|Two| E[Result 2]
-```
-
-```mermaid
-mindmap
-  root((mindmap))
-    Origins
-      Long history
-      ::icon(fa fa-book)
-      Popularisation
-        British popular psychology author Tony Buzan
-    Research
-      On effectiveness<br/>and features
-      On Automatic creation
-        Uses
-            Creative techniques
-            Strategic planning
-            Argument mapping
-    Tools
-      Pen and paper
-      Mermaid
-```
-
-```plantuml {scale: 0.7}
-@startuml
-
-package "Some Group" {
-  HTTP - [First Component]
-  [Another Component]
-}
-
-node "Other Groups" {
-  FTP - [Second Component]
-  [First Component] --> FTP
-}
-
-cloud {
-  [Example 1]
-}
-
-database "MySql" {
-  folder "This is my folder" {
-    [Folder 3]
-  }
-  frame "Foo" {
-    [Frame 4]
-  }
-}
-
-[Another Component] --> [Example 1]
-[Example 1] --> [Folder 3]
-[Folder 3] --> [Frame 4]
-
-@enduml
-```
-
-</div>
-
-Learn more: [Mermaid Diagrams](https://sli.dev/features/mermaid) and [PlantUML Diagrams](https://sli.dev/features/plantuml)
-
----
-foo: bar
-dragPos:
-  square: 691,32,167,_,-16
----
-
-# Draggable Elements
-
-Double-click on the draggable elements to edit their positions.
-
-<br>
-
-###### Directive Usage
-
-```md
-<img v-drag="'square'" src="https://sli.dev/logo.png">
-```
-
-<br>
-
-###### Component Usage
-
-```md
-<v-drag text-3xl>
-  <div class="i-carbon:arrow-up" />
-  Use the `v-drag` component to have a draggable container!
-</v-drag>
-```
-
-<v-drag pos="663,206,261,_,-15">
-  <div text-center text-3xl border border-main rounded>
-    Double-click me!
-  </div>
-</v-drag>
-
-<img v-drag="'square'" src="https://sli.dev/logo.png">
-
-###### Draggable Arrow
-
-```md
-<v-drag-arrow two-way />
-```
-
-<v-drag-arrow pos="67,452,253,46" two-way op70 />
-
----
-src: ./pages/imported-slides.md
-hide: false
----
+実際にこの2つのパターンはどのように読み取るのかをお見せします。
+-->
 
 ---
 
-# Monaco Editor
+## ユーザーの読み取り
 
-Slidev provides built-in Monaco Editor support.
+**PK** + **SK** の組み合わせでデータを一意に特定できるため、`GetItem` でデータを取得します。
 
-Add `{monaco}` to the code block to turn it into an editor:
+- PK: `UserA`
+- SK: `PROFILE#`
 
-```ts {monaco}
-import { ref } from 'vue'
-import { emptyArray } from './external'
+![contribution-get-item](./images/contribution-get-item.png)
 
-const arr = ref(emptyArray(10))
-```
+<!--
+まず、ユーザーの読み取りは `GetItem` で行います。
 
-Use `{monaco-run}` to create an editor that can execute the code directly in the slide:
+単一ユーザーの読み取りなので、一意性のあるデータを取得できる `GetItem` でよいということですね。
 
-```ts {monaco-run}
-import { version } from 'vue'
-import { emptyArray, sayHello } from './external'
+今回 PK の値として格納した `UserA` は ユーザーを識別する ID としてほかのユーザーと被ることはないという制約があります。
 
-sayHello()
-console.log(`vue ${version}`)
-console.log(emptyArray<number>(10).reduce(fib => [...fib, fib.at(-1)! + fib.at(-2)!], [1, 1]))
-```
+`UserA` という値のみでそのユーザーを特定できますが、`UserA` というパーティションに様々なデータを格納できるため、`UserA` という値でそのユーザーであるとわかっても アイテムまでは特定できないわけです。そのため、今回は SK に `PROFILE#` を設定しました。
+-->
 
 ---
-layout: center
-class: text-center
+
+## アウトプットの読み取り
+
+`Query` の `begins_with` (~で始まる) 条件を使用することで取得できます。
+
+- PK: `UserA`
+- SK: `SK begins_with CONTRIBUTION#`
+
+![contribution-query](./images/contribution-query.png)
+
+※ わかりやすいように ID に該当する部分をシリアル値にしていますが、実際には UUID の方が安全です
+
+(結果的整合性が担保される分散 DB であるため書き込み時に調停サーバーが必要になる)
+
+<!--
+アウトプットの読み取りに関しては、`Query` を使用します。
+
+`Query` は特定パーティションを指定して、そのパーティション内でソートされているカラムに対して使用できます。
+
+`begins_with` は特定のキーワードで始まるデータを取得できる条件です。
+
+一見、ソートと無縁に思えますが、文字列もソートされているため、表の CONTRIBUTION#` が並んでいて範囲として成立していることがビジュアル的にもわかります。
+
+この `begins_with` という条件が非常に強力で、これを活かすために `#` でデータモデル名と ID を分けて順番にデータが並ぶように設計するのです。
+
+これによって、RDB のようなテーブル間の結合操作という、データの増加に伴い重くなる操作なしに 1対多 のデータを高速で取得できるのです。
+-->
+
 ---
 
-# Learn More
+# 1つのテーブルに全てのデータモデルを詰め込む
 
-[Documentation](https://sli.dev) · [GitHub](https://github.com/slidevjs/slidev) · [Showcases](https://sli.dev/resources/showcases)
+- RDB: データモデルごとにテーブルを分ける
+- Amazon DynamoDB: _1つのテーブルに全てのデータモデルを格納する_
+  - → このパターンを **Single Table Design** と呼ぶ
 
-<PoweredBySlidev mt-10 />
+![std](./images/std.png)
+
+<!--
+全く触れていませんでしたが、先ほど提示したデータ取得パターンでは、本来 RDBMS では複数テーブルに分けるはずのデータモデルを1つのテーブルに詰め込んでいました。
+
+この 1つのテーブルに全てのデータモデルを格納するパターンを Single Table Design と言い、DynamoDB を使用する上で推奨されるパターンです。
+
+表の色分けされている部分が RDBMS ではテーブルが分かれているはずのデータモデルです。
+-->
+
+---
+
+# まとめ
+
+## 設計の基本原則
+
+- **アクセスパターン優先**: 先にクエリパターンを洗い出す！
+  - NoSQL は設計完了後に自由にクエリできるカラムを増やすことが困難
+  - 書き込みはどのように設計してもほとんどパフォーマンスは変わらない
+
+- **コスト最適化**: 消費する Capacity Unit を減らす！
+  - 読み取りに `Scan` は使わない
+  - `Query` を使用して結合操作を削減する
+
+<!--
+最期に、今回お伝えしたかったことのまとめです。
+
+DynamoDB の設計ではアクセスパターンを重視します。今回ご紹介する際にもどのようなスキーマにするかとはお伝えせず、どのようなデータ取得をしたいかという例からお伝えしました。これは実際に DynamoDB での設計に近い考え方となっていました。
+
+次に、コスト最適化です。消費する Capacity Unit を減らすことを考えてください。これを考えれば、コストだけでなくレイテンシも安定します。このためにテーブルの全スキャンである `Scan` は使用しないことを覚えておいてください。
+
+以上で発表は終了です。
+
+DynamoDB は永年無料枠がありますので、今回ご興味を持たれた方はぜひ触ってみてください。
+
+ご清聴ありがとうございました。
+-->
